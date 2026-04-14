@@ -1,17 +1,40 @@
+"""
+Utility functions for data splitting and preprocessing.
+
+These helpers are designed to be importable without side effects —
+no code runs at module import time.
+"""
+
 import numpy as np
-import pandas as pd
+
 
 def split_train_test(df, test_size=0.2, random_state=42):
     """
-    Splits the DataFrame into training and testing sets.
+    Split a DataFrame into training and testing sets.
 
-    Parameters:
-    df (pd.DataFrame): The input DataFrame.
-    test_size (float): Proportion of the dataset to include in the test split.
-    random_state (int): Random seed for reproducibility.
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The input DataFrame to split.
+    test_size : float, optional
+        Proportion of the dataset to include in the test split (default=0.2).
+    random_state : int, optional
+        Random seed for reproducibility (default=42).
 
-    Returns:
-    pd.DataFrame, pd.DataFrame: Training and testing DataFrames.
+    Returns
+    -------
+    train : pd.DataFrame
+        Training subset.
+    test : pd.DataFrame
+        Testing subset.
+
+    Examples
+    --------
+    >>> import pandas as pd
+    >>> df = pd.DataFrame({"a": range(100), "b": range(100)})
+    >>> train, test = split_train_test(df, test_size=0.2, random_state=0)
+    >>> len(test) == 20
+    True
     """
     np.random.seed(random_state)
     shuffled_indices = np.random.permutation(len(df))
