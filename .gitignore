@@ -3,7 +3,7 @@
 .envrc
 *.csv
 *.zip
-data/
+/data/
 
 # Environnements virtuels
 .venv
@@ -108,3 +108,7 @@ docs/_build/
 celerybeat-schedule
 celerybeat.pid
 .abstra/
+
+# MLflow & modèles locaux
+mlruns/
+models/

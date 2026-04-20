@@ -1,4 +1,6 @@
 import os
+import zipfile
+
 import pandas as pd
 import s3fs
 from dotenv import load_dotenv
@@ -8,15 +10,68 @@ load_dotenv()
 
 def load_data_from_s3() -> pd.DataFrame:
     """
-    Loads the aggregated wildfire dataset directly from S3 (MinIO).
-    Requires S3_ENDPOINT_URL and S3_BUCKET to be set in the environment.
+    Load and clean the wildfire dataset from S3 / MinIO.
+
+    Reads ``S3_ENDPOINT_URL`` and ``S3_BUCKET`` from environment variables
+    (set in your ``.env`` file or shell).
+
+    If ``ACCESS_KEY`` is not set, connects anonymously (public bucket).
+
+    The raw file ``df_aggregated.parquet`` is fetched from S3, with automatic
+    fallback to ``df_aggregated.csv.zip`` if the parquet file is not found.
+
+    Returns
+    -------
+    pd.DataFrame
+        Cleaned dataset with columns:
+        pr, rmax, rmin, sph, srad, tmmn, tmmx, vs, vpd,
+        fm100, fm1000, erc, bi, etr, pet, label.
+
+    Raises
+    ------
+    EnvironmentError
+        If ``S3_ENDPOINT_URL`` or ``S3_BUCKET`` are not set.
     """
+    endpoint = os.getenv("S3_ENDPOINT_URL")
+    bucket = os.getenv("S3_BUCKET")
+
+    if not endpoint or not bucket:
+        raise EnvironmentError(
+            "S3_ENDPOINT_URL and S3_BUCKET must be set in the environment or .env file."
+        )
+
+    access_key = os.getenv("ACCESS_KEY") or None
+    secret_key = os.getenv("SECRET_KEY") or None
+    session_token = os.getenv("SESSION_TOKEN") or None
+
+    # Use anonymous access if no credentials are provided (public bucket)
+    anon = not bool(access_key)
+
     fs = s3fs.S3FileSystem(
-        client_kwargs={'endpoint_url': os.getenv('S3_ENDPOINT_URL')}
+        anon=anon,
+        key=access_key,
+        secret=secret_key,
+        token=session_token,
+        client_kwargs={
+            "endpoint_url": endpoint,
+            "verify": False,
+        },
     )
-    
-    bucket = os.getenv('S3_BUCKET')
-    file_path = f"{bucket}/df_aggregated.parquet"
-    
-    with fs.open(file_path, 'rb') as f:
-        return pd.read_csv(f)
+
+    try:
+        file_path = f"{bucket}/df_aggregated.parquet"
+        with fs.open(file_path, "rb") as f:
+            df = pd.read_parquet(f)
+
+    except Exception as e:
+        print(f"Try to read parquet is non successfull : {e}")
+        file_path = f"{bucket}/df_aggregated.csv.zip"
+        with fs.open(file_path, "rb") as f:
+            with zipfile.ZipFile(f) as z:
+                csv_files = [
+                    name for name in z.namelist()
+                    if name.endswith(".csv") and not name.startswith("__MACOSX")
+                ]
+                df = pd.read_csv(z.open(csv_files[0]))
+
+    return _clean(df)
