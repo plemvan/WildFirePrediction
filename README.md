@@ -75,3 +75,65 @@ A detailed description of the theoretical foundations, implementation choices, a
 - [Overleaf Report Link](https://overleaf.enst.fr/project/6901e9ac9912eb0d35ba0d1d)
 
 This document includes a rigorous derivation of the XGBoost objective, an analysis of the dataset, and a comparison with existing models from the literature.
+
+## Installation & Usage
+
+### Prerequisites
+- Python 3.13+
+- [uv](https://docs.astral.sh/uv/) for dependency management
+- A `.env` file based on `.env.example`
+
+### Setup
+```bash
+git clone https://github.com/plemvan/WildFirePrediction
+cd WildFirePrediction
+uv sync
+```
+
+### Train the model
+```bash
+PYTHONPATH=. python src/models/train.py --n-iter 20 --n-splits 5
+```
+
+### Run the API locally
+```bash
+PYTHONPATH=. uvicorn src.api.main:app --reload
+# API available at http://localhost:8000
+# Docs at http://localhost:8000/docs
+```
+
+## Deployment
+
+### API
+The API is live at **[wildfire-api.user.lab.sspcloud.fr/docs](https://wildfire-api.user.lab.sspcloud.fr/docs)** — try it directly from your browser.
+
+- `GET /health` — liveness check
+- `POST /predict` — wildfire probability prediction
+- `GET /docs` — interactive Swagger documentation
+
+### Kubernetes & ArgoCD
+The API is deployed on SSP Cloud (Onyxia) via Kubernetes.
+ArgoCD is configured to watch the `k8s/` folder of this repository,
+with automatic sync policy on the `develop` branch.
+
+To apply manifests manually:
+```bash
+kubectl apply -f k8s/
+```
+
+### Monitoring & Logs
+Grafana and Prometheus are not available on SSP Cloud.
+Monitoring is done via `kubectl logs`:
+
+```bash
+# Stream live logs from the API pod
+kubectl logs -f deployment/wildfire-api -n <namespace>
+
+# Each prediction is logged with inputs and output:
+# PREDICT | inputs={...} | wildfire=0 | probability=0.3032
+```
+
+### MLflow
+Model training and experiment tracking are managed via MLflow.
+The production model is registered under `wildfire-xgboost-classifier`
+in the MLflow Model Registry.
