@@ -1,3 +1,20 @@
+"""
+Data loading and preparation for the WildFire dataset.
+
+This module is the single entry point for data access.
+It loads the raw CSV from S3 and returns a clean DataFrame
+ready for model training.
+
+Usage
+-----
+    from src.data.df_aggregated import load_data_from_s3
+
+    df = load_data_from_s3()
+    # df has columns: pr, rmax, rmin, sph, srad, tmmn, tmmx,
+    #                 vs, vpd, fm100, fm1000, erc, bi, etr, pet, label
+"""
+
+import ast
 import os
 import zipfile
 
@@ -5,8 +22,60 @@ import pandas as pd
 import s3fs
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
+
 load_dotenv()
+
+FEATURES = [
+    "pr", "rmax", "rmin", "sph", "srad",
+    "tmmn", "tmmx", "vs", "vpd",
+    "fm100", "fm1000", "erc", "bi", "etr", "pet",
+]
+
+TARGET_COLUMN = "label"
+
+
+def _clean(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Clean the raw CSV into a model-ready DataFrame.
+
+    Steps
+    -----
+    1. Parse the ``Wildfire`` column (stored as a Python tuple string)
+       into a binary ``label`` column (1 = fire, 0 = no fire).
+    2. Keep only the 15 meteorological features and ``label``.
+    3. Cast all columns to float / int and drop rows with NaN.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Raw DataFrame as loaded from S3.
+
+    Returns
+    -------
+    pd.DataFrame
+        Cleaned DataFrame with columns FEATURES + [label].
+    """
+    # Parse "Wildfire": e.g. "(1, 'Yes')" -> 1, "(0, 'No')" -> 0
+    df[TARGET_COLUMN] = df["Wildfire"].apply(
+        lambda x: 1 if ast.literal_eval(x)[1].lower() == "yes" else 0
+    )
+
+    # Keep only relevant columns
+    cols = FEATURES + [TARGET_COLUMN]
+    df = df[cols].copy()
+
+    # Ensure numeric types (some values may have commas or extra spaces)
+    for col in FEATURES:
+        df[col] = pd.to_numeric(
+            df[col].astype(str).str.replace(",", ".").str.strip(),
+            errors="coerce",
+        )
+
+    df = df.dropna()
+    df[TARGET_COLUMN] = df[TARGET_COLUMN].astype(int)
+
+    return df.reset_index(drop=True)
+
 
 def load_data_from_s3() -> pd.DataFrame:
     """
